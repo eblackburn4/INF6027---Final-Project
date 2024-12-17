@@ -10,6 +10,7 @@ library(hrbrthemes)
 library(GGally)
 library(ggfortify)
 library(tidytext)
+library(textdata)
 
 setwd("~/Desktop/Intro to DS")
 
@@ -142,7 +143,9 @@ song_master <- song_master |>
 
 #load in sentiment lexicon
 
-lexicon <- get_sentiments("bing")
+lexicon_bing <- get_sentiments("bing")
+lexicon_afinn <- get_sentiments("afinn")
+
 
 #use tidytext's 'unnest tokens' function to split each word into its own row, then inner join with the sentiment lexicon
 
@@ -152,27 +155,40 @@ sm_tokenized_lyrics <- song_master |>
 
 #join the sentiment lexicon with the tokenized lyrics, and remove stopwords
 
-sm_tokenized_lyrics_sentiment <- sm_tokenized_lyrics |>
-  inner_join(lexicon, by = 'word')  |>
+sm_tokenized_lyrics_sentiment_bing <- sm_tokenized_lyrics |>
+  inner_join(lexicon_bing, by = 'word')  |>
+  anti_join(stop_words, by = 'word')
+
+sm_tokenized_lyrics_sentiment_afinn <- sm_tokenized_lyrics |>
+  inner_join(lexicon_afinn, by = 'word')  |>
   anti_join(stop_words, by = 'word')
 
 #exploring number of positive vs negative words, and most common positive and negative words
 
-word_counts_posneg <- sm_tokenized_lyrics_sentiment |>
-  count(word, sentiment, sort = TRUE)
+word_counts_posneg <- sm_tokenized_lyrics_sentiment_afinn |>
+  count(word, value, sort = TRUE)
 
 pos_vs_neg <- word_counts_posneg |>
-  ggplot(aes(x = sentiment, fill = sentiment)) +
-  geom_bar() +
-  labs(title = 'Incidence of unique positive and negative words',
+  group_by(value) |>
+  summarise(incidences = sum(n)) |>
+  ggplot(aes(x = as.factor(value), y = incidences, fill = as.factor(value))) +
+  geom_col() +
+  labs(title = 'Incidence of Unique Positive and Negative Words',
        subtitle = 'Based on a sample of Billboard 100 charting songs from 1962-2018',
        x = 'Sentiment',
-       y = 'Number of unique words',
-       caption = 'Data from MusicOSet. Sentiment analysis using lexicon from Bing et al. (2004)')+
+       y = 'Number of Unique Words',
+       caption = 'Data from MusicOSet. Sentiment analysis using lexicon from Bing et al. (2004)') +
   theme_ipsum_rc() +
-  theme(legend.position = 'none',
-        axis.title = element_text(face = 'bold')) +
-  scale_fill_viridis_d()
+  theme(
+    legend.position = 'none',
+    axis.title = element_text(face = 'bold'),
+    panel.grid.major.x = element_blank(),  
+    panel.grid.minor.x = element_blank()
+  ) +
+  scale_fill_brewer(palette = 'RdBu') +
+
+pos_vs_neg
+
 
 top10posneg <- word_counts_posneg |>
   group_by(sentiment) |>
@@ -192,7 +208,7 @@ top10posneg <- word_counts_posneg |>
 
 #Find average sentiment of songs released in each year, by year
 
-avg_sentiment_year_all <- sm_tokenized_lyrics_sentiment |>
+avg_sentiment_year_all <- sm_tokenized_lyrics_sentiment_bing |>
   filter(release_year > 1959) |>
   select(c('release_year', 'word', 'sentiment')) |>
   group_by(release_year, sentiment) |>
@@ -209,33 +225,11 @@ avg_sentiment_plot_all <- avg_sentiment_year_all |>
   scale_colour_viridis_c()
 
 
-#examine seasonal trends, by grouping data across all years by month and day of release
+#examine seasonal trends, by grouping data across all years by month of release
 
-avg_sentiment_seasonal <- sm_tokenized_lyrics_sentiment |>
-  filter(release_year < 2019 & release_year > 2009) |>
-  mutate(release_date = as.character(release_date)) |>
-  mutate(release_month_day = substr(release_date, nchar(release_date) -4 , nchar(release_date))) |>
-  select(c('release_month_day', 'word', 'sentiment')) |>
-  group_by(release_month_day, sentiment) |>
-  summarise(word_count = n(), .groups = 'drop') |>
-  pivot_wider(names_from = sentiment, values_from = word_count) |>
-  summarise(release_month_day, sentscore = (positive - negative)/(positive + negative))
-  
-#plot the graph (I have to add a dummy 'year' onto the start of the 'release_month_date' column otherwise R doesn't allow me to store it as a date)
-
-avg_sentiment_plot_seasonal <- avg_sentiment_seasonal |>
-  mutate(release_month_day = as.Date(paste0("2022-", release_month_day), "%Y-%m-%d")) |>
-  ggplot(aes(x = release_month_day, y = sentscore)) +
-  geom_line() +
-  geom_smooth(method = 'loess', se = FALSE) +
-  theme_ipsum_rc() +
-  scale_x_date(date_labels = "%b %d", date_breaks = "1 month") +
-  scale_colour_viridis_c()
-
-#same graph, but grouped by month
-
-avg_sentiment_seasonal_month <- sm_tokenized_lyrics_sentiment |>
-  filter(release_year > 1969 & release_year < 1980) |>
+generate_sentiment_seasonal_graph_bing <- function(startdate, enddate) {
+avg_sentiment_seasonal_month <- sm_tokenized_lyrics_sentiment_bing |>
+  filter(release_year >= startdate & release_year <= enddate) |>
   mutate(release_date = as.character(release_date)) |>
   mutate(release_month = substr(release_date, 6,7)) |>
   drop_na(release_month) |>
@@ -245,7 +239,7 @@ avg_sentiment_seasonal_month <- sm_tokenized_lyrics_sentiment |>
   pivot_wider(names_from = sentiment, values_from = word_count) |>
   summarise(release_month, sentscore = (positive - negative)/(positive + negative))
 
-avg_sentiment_plot_seasonal_month <- avg_sentiment_seasonal_month |>
+avg_sentiment_plot_seasonal_month_bing <- avg_sentiment_seasonal_month |>
   mutate(release_month_day = as.Date(paste0("2022-", release_month, "-01"), "%Y-%m-%d")) |>
   ggplot(aes(x = release_month_day, y = sentscore, group = 1)) +
   geom_point(aes(color = sentscore > 0), size = 3) +
@@ -253,11 +247,65 @@ avg_sentiment_plot_seasonal_month <- avg_sentiment_seasonal_month |>
   geom_abline(slope = 0, intercept = 0, linetype = 2) +
   theme_ipsum_rc() +
   scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  ylim(NA, 0.2) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.x = element_text(size = 12),
         panel.grid.minor.x = element_blank()) +
-  labs(title = '1970s') +
+  labs(title = startdate) +
   scale_colour_viridis_d(option = 'plasma')
 
-avg_sentiment_plot_seasonal_month
+avg_sentiment_plot_seasonal_month_bing
+}
 
+
+
+
+
+
+
+#--------AFINN VERSIONS
+
+avg_sentiment_year_all_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
+  filter(release_year > 1959) |>
+  select(c('release_year', 'word', 'value')) |>
+  group_by(release_year) |>
+  summarise(sentiment_score = mean(value), .groups = 'drop')
+
+avg_sentiment_plot_all_afinn <- avg_sentiment_year_all_afinn |>
+  ggplot() +
+  geom_line(aes(x = release_year, y = sentiment_score)) +
+  geom_smooth(aes(x = release_year, y = sentiment_score), method = 'lm', se = FALSE, color = 'purple') +
+  geom_abline(slope = 0, intercept = 0, linetype = 2) +
+  theme_ipsum_rc() +
+  scale_colour_viridis_c()
+
+generate_sentiment_seasonal_graph_afinn <- function(startdate, enddate) {
+  avg_sentiment_seasonal_month <- sm_tokenized_lyrics_sentiment_afinn |>
+    filter(release_year >= startdate & release_year <= enddate) |>
+    mutate(release_date = as.character(release_date)) |>
+    mutate(release_month = substr(release_date, 6,7)) |>
+    drop_na(release_month) |>
+    select(c('release_month', 'word', 'value')) |>
+    group_by(release_month) |>
+    summarise(sentiment_score = mean(value), .groups = 'drop')
+  
+  avg_sentiment_plot_seasonal_month_afinn <- avg_sentiment_seasonal_month |>
+    mutate(release_month_day = as.Date(paste0("2022-", release_month, "-01"), "%Y-%m-%d")) |>
+    ggplot(aes(x = release_month_day, y = sentiment_score, group = 1)) +
+    geom_point(aes(color = sentiment_score > 0), size = 3) +
+    geom_line(linewidth = 0.5, color = 'darkgrey') +
+    geom_abline(slope = 0, intercept = 0, linetype = 2) +
+    theme_ipsum_rc() +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.title.x = element_text(size = 12),
+          panel.grid.minor.x = element_blank()) +
+    ylim(-0.6,0.6) +
+    labs(title = startdate,caption = 'AFINN') +
+    scale_colour_viridis_d(option = 'plasma')
+  
+  avg_sentiment_plot_seasonal_month_afinn
+}
+
+
+g
