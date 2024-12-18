@@ -11,6 +11,7 @@ library(GGally)
 library(ggfortify)
 library(tidytext)
 library(textdata)
+library(vader)
 
 setwd("~/Desktop/Intro to DS")
 
@@ -20,7 +21,7 @@ setwd("~/Desktop/Intro to DS")
 ## ------------------------------------------------------------------------
 
 
-# 1. Reading in data ------------------------------------------------------
+# Reading in data ------------------------------------------------------
 
 #read in data for lyrics, track metadata (for release date), artist metadata (for genre), and song popularity, and drop unneeded columns
 
@@ -130,7 +131,7 @@ songsbyyearpop <- song_master |>
 
 songsbyyearpop 
 
-#--------------------------------- 2.Sentiment analysis preprocessing --------------------------------------------
+# Sentiment analysis preprocessing --------------------------------------------
 
 #remove meta-words and linebreaks in the the lyrics column that are not actually part of the lyrics e.g. 'verse 1'
 
@@ -148,6 +149,7 @@ lexicon_afinn <- get_sentiments("afinn")
 
 
 #use tidytext's 'unnest tokens' function to split each word into its own row, then inner join with the sentiment lexicon
+#songs with no lyrics are filtered out
 
 sm_tokenized_lyrics <- song_master |>
   filter(lyrics != "") |>
@@ -206,6 +208,9 @@ top10posneg <- word_counts_posneg |>
         strip.text = element_text(face = "italic")) +
   scale_fill_viridis_d()
 
+
+# Sentiment analysis ------------------------------------------------------
+
 #Find average sentiment of songs released in each year, by year
 
 avg_sentiment_year_all <- sm_tokenized_lyrics_sentiment_bing |>
@@ -214,12 +219,13 @@ avg_sentiment_year_all <- sm_tokenized_lyrics_sentiment_bing |>
   group_by(release_year, sentiment) |>
   summarise(word_count = n(), .groups = 'drop') |>
   pivot_wider(names_from = sentiment, values_from = word_count) |>
-  summarise(release_year, sentscore = (positive - negative)/(positive + negative))
+  summarise(release_year, sentscore = (positive - negative))
 
 avg_sentiment_plot_all <- avg_sentiment_year_all |>
-  ggplot() +
-  geom_line(aes(x = release_year, y = sentscore)) +
-  geom_smooth(aes(x = release_year, y = sentscore), method = 'lm', se = FALSE, color = 'purple') +
+  filter(release_year > 1963) |>
+  ggplot(aes(x = release_year, y = sentscore)) +
+  geom_point() +
+  geom_smooth(method = 'loess', se = FALSE, color = 'purple') +
   geom_abline(slope = 0, intercept = 0, linetype = 2) +
   theme_ipsum_rc() +
   scale_colour_viridis_c()
