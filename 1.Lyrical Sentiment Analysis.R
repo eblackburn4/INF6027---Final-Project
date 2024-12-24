@@ -1,6 +1,6 @@
 ## ---------------------------
 ## Purpose of script: Intro to data science final project part I: R Code for sentiment analysis 
-## of hit song lyrics and comparison to nob hits
+## of hit song lyrics
 ## Author: Ned Blackburn
 ## Date Created: 2024-11-27
 
@@ -11,7 +11,9 @@ library(GGally)
 library(ggfortify)
 library(tidytext)
 library(textdata)
-library(vader)
+library(scico)
+library(ggside)
+library(ggstatsplot)
 
 setwd("~/Desktop/Intro to DS")
 
@@ -37,6 +39,12 @@ artist_meta <- read_delim("Data/musicoset_metadata/artists.csv",
   trim_ws = TRUE
 )
 
+#read in song popularity data
+song_pop <- read_delim("Data/musicoset_popularity/song_pop.csv", delim = "\t") |>
+  arrange(year) |>
+  select(song_id, year_end_score) |>
+  distinct(song_id, .keep_all = TRUE)
+  
 
 #read in song metadata. This particular CSV isn't formatted properly so will require additional cleaning steps
 
@@ -66,18 +74,22 @@ song_meta <- song_meta |>
            sep = "\t", 
            fill = "right", 
            extra = "merge") |>
-  select(!c("billboard","explicit"))
+  select(!c("billboard"))
 
 
-#check for na values - all checks return 0 so we're good to proceed
+#check for na values - all checks return 0 on the columns we care about so we're good to proceed
 sum(is.na(song_meta))
 sum(is.na(song_lyrics))
 sum(is.na(track_meta))
+sum(is.na(song_pop))
+sum(is.na(artist_meta))
 
 
-#join all datasets on the 'song_id' column 
-song_master <- left_join(song_meta, track_meta, by = 'song_id') |>
-  left_join(song_lyrics, by = 'song_id')
+#join all datasets on the 'song_id' column to create 'song_master'. We'll use this as the basis for all subsequent analysis
+
+song_master <- inner_join(song_meta, track_meta, by = 'song_id') |>
+  inner_join(song_lyrics, by = 'song_id') |>
+  inner_join(song_pop, by = 'song_id')
 
 #split out 'year' value from release date for consistency across release
 
@@ -170,15 +182,15 @@ sm_tokenized_lyrics_sentiment_afinn <- sm_tokenized_lyrics |>
 word_counts_posneg <- sm_tokenized_lyrics_sentiment_afinn |>
   count(word, value, sort = TRUE)
 
-pos_vs_neg <- word_counts_posneg |>
+pos_vs_neg_total <- word_counts_posneg |>
   group_by(value) |>
   summarise(incidences = sum(n)) |>
   ggplot(aes(x = as.factor(value), y = incidences, fill = as.factor(value))) +
   geom_col() +
   labs(title = 'Incidence of Unique Positive and Negative Words',
        subtitle = 'Based on a sample of Billboard 100 charting songs from 1962-2018',
-       x = 'Sentiment',
-       y = 'Number of Unique Words',
+       x = 'Sentiment (5 is most positive)',
+       y = 'Number of unique words',
        caption = 'Data from MusicOSet. Sentiment analysis using lexicon from Bing et al. (2004)') +
   theme_ipsum_rc() +
   theme(
@@ -187,9 +199,29 @@ pos_vs_neg <- word_counts_posneg |>
     panel.grid.major.x = element_blank(),  
     panel.grid.minor.x = element_blank()
   ) +
-  scale_fill_brewer(palette = 'RdBu') +
+  scale_fill_scico_d(palette = 'vikO') 
 
-pos_vs_neg
+pos_vs_neg_unique <- word_counts_posneg |>
+  group_by(value) |>
+  summarise(incidences = n()) |>
+  ggplot(aes(x = as.factor(value), y = incidences, fill = as.factor(value))) +
+  geom_col() +
+  labs(title = 'Incidence of Unique Positive and Negative Words',
+       subtitle = 'Based on a sample of Billboard 100 charting songs from 1962-2018',
+       x = 'Sentiment (5 is most positive)',
+       y = 'Number of unique words',
+       caption = 'Data from MusicOSet. Sentiment analysis using lexicon from Bing et al. (2004)') +
+  theme_ipsum_rc() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_text(face = 'bold'),
+    panel.grid.major.x = element_blank(),  
+    panel.grid.minor.x = element_blank()
+  ) +
+  scale_fill_scico_d(palette = 'vikO') 
+
+
+pos_vs_neg_unique
 
 
 top10posneg <- word_counts_posneg |>
@@ -219,7 +251,7 @@ avg_sentiment_year_all <- sm_tokenized_lyrics_sentiment_bing |>
   group_by(release_year, sentiment) |>
   summarise(word_count = n(), .groups = 'drop') |>
   pivot_wider(names_from = sentiment, values_from = word_count) |>
-  summarise(release_year, sentscore = (positive - negative))
+  summarise(release_year, sentscore = ((positive - negative)/(positive + negative)))
 
 avg_sentiment_plot_all <- avg_sentiment_year_all |>
   filter(release_year > 1963) |>
@@ -263,12 +295,6 @@ avg_sentiment_plot_seasonal_month_bing <- avg_sentiment_seasonal_month |>
 avg_sentiment_plot_seasonal_month_bing
 }
 
-
-
-
-
-
-
 #--------AFINN VERSIONS
 
 avg_sentiment_year_all_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
@@ -279,8 +305,8 @@ avg_sentiment_year_all_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
 
 avg_sentiment_plot_all_afinn <- avg_sentiment_year_all_afinn |>
   ggplot() +
-  geom_line(aes(x = release_year, y = sentiment_score)) +
-  geom_smooth(aes(x = release_year, y = sentiment_score), method = 'lm', se = FALSE, color = 'purple') +
+  geom_point(aes(x = release_year, y = sentiment_score)) +
+  geom_smooth(aes(x = release_year, y = sentiment_score), method = 'loess', se = FALSE, color = 'purple') +
   geom_abline(slope = 0, intercept = 0, linetype = 2) +
   theme_ipsum_rc() +
   scale_colour_viridis_c()
@@ -313,5 +339,39 @@ generate_sentiment_seasonal_graph_afinn <- function(startdate, enddate) {
   avg_sentiment_plot_seasonal_month_afinn
 }
 
+#explicitness: percentage of explicit songs released in each year
+prop_explicit_plot <- song_master |>
+  filter(release_year > 1959) |>
+  mutate(is_explicit = ifelse(explicit == 'True',1,0)) |>
+  group_by(release_year) |>
+  summarise(prop = sum(is_explicit)/n()) |>
+  ggplot(aes(x = release_year, y = prop)) +
+  geom_col(fill = 'pink') 
 
-g
+#popularity vs year-end score: are they the same?
+
+song_master |>
+  filter(release_year > 1959) |>
+  group_by(release_year) |>
+  summarise(pop = median(popularity), score = mean(year_end_score)) |>
+  ggplot(aes(x = release_year)) +
+  geom_col(aes(y=pop)) 
+  
+summary <- song_master |>
+  filter(release_year > 1961) |>
+  group_by(release_year) |>
+  summarise(pop = median(popularity), score = mean(year_end_score)) |>
+  ggplot(aes(x = release_year)) +
+  geom_col(aes(y=score)) 
+
+song_master |>
+ggscatterstats(
+  x = popularity,
+  y = year_end_score,
+  type = 'non-parametric',
+  point.args = list(color = 'purple', alpha = 0.4)
+) +
+  theme_ipsum_rc() +
+  labs(title = 'Popularity vs Year end score',
+       subtitle = 'As popularity increases, so does year end score')
+
