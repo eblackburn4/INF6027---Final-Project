@@ -1,8 +1,8 @@
 ## ---------------------------
-## Purpose of script: Intro to data science final project part I: R Code for sentiment analysis 
+## Purpose of script: Intro to data science final project part II: R Code for sentiment analysis 
 ## of hit song lyrics
 ## Author: Ned Blackburn
-## Date Created: 2024-11-27
+## Date Created: 2024-11-28
 
 options(scipen = 6, digits = 5) 
 library(tidyverse)
@@ -29,14 +29,14 @@ setwd("~/Desktop/Intro to DS")
 
 track_meta <- read.csv("Data/musicoset_metadata/tracks.csv", sep = "\t") |>
   select(!c('album_id', 'track_number'))
-  
+
 song_lyrics <- read.csv("Data/musicoset_songfeatures/lyrics.csv", sep = "\t")
 
 artist_meta <- read_delim("Data/musicoset_metadata/artists.csv",
-  delim = "\t",          # Main delimiter seems to be tabs based on a visual inspection
-  escape_double = TRUE,  # Handle stray quotes
-  col_names = TRUE,
-  trim_ws = TRUE
+                          delim = "\t",          # Main delimiter seems to be tabs based on a visual inspection
+                          escape_double = TRUE,  # Handle stray quotes
+                          col_names = TRUE,
+                          trim_ws = TRUE
 )
 
 #read in song popularity data
@@ -44,7 +44,7 @@ song_pop <- read_delim("Data/musicoset_popularity/song_pop.csv", delim = "\t") |
   arrange(year) |>
   select(song_id, year_end_score) |>
   distinct(song_id, .keep_all = TRUE)
-  
+
 
 #read in song metadata. This particular CSV isn't formatted properly so will require additional cleaning steps
 
@@ -91,7 +91,7 @@ song_master <- inner_join(song_meta, track_meta, by = 'song_id') |>
   inner_join(song_lyrics, by = 'song_id') |>
   inner_join(song_pop, by = 'song_id')
 
-#split out 'year' value from release date for consistency across release
+#split out 'year' value from release date for consistency across releases in terms of granularity
 
 song_master <- song_master |>
   mutate(release_year = str_sub(release_date,1,4))
@@ -100,48 +100,16 @@ song_master$popularity <- as.numeric(song_master$popularity)
 song_master$release_year <- as.numeric(song_master$release_year)
 song_master$release_date <- as.Date(song_master$release_date)
 
-#Flag songs in the upper and lower quartiles of popularity
+#Flag songs in the upper and lower quartiles of popularity, just for interest
 
 song_master <- song_master |>
   mutate(pop_quartile = case_when(
     popularity <= quantile(popularity, 0.25) ~ "Bottom 25%",
     popularity >= quantile(popularity, 0.75) ~ "Top 25%",
     TRUE ~ "Middle 50%"
-    )
   )
-  
-# EDA ---------------------------------------------------------------------
+  )
 
-#plot release dates in dataset by year
-
-songsbyyear <- song_master |>
-  filter(release_year > 1959) |>
-  ggplot(aes(x = release_year)) +
-  geom_bar(fill = 'purple') +
-  theme_ipsum_rc() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.x = element_text(size = 11, face = 'bold'),
-        axis.title.y = element_text(size = 11, face = 'bold'),
-        panel.grid.minor.x = element_blank()) +
-  scale_x_continuous(breaks = seq(1960, 2019, by = 5)) 
-
-songsbyyear
-
-#plot proportions of most/least popular songs release in each year
-
-songsbyyearpop <- song_master |>
-  filter(release_year > 1959) |>
-  ggplot(aes(x = release_year, fill = pop_quartile, color = pop_quartile)) +
-  geom_bar(position = 'fill') +
-  theme_ipsum_rc() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.x = element_text(size = 12),
-        panel.grid.minor.x = element_blank()) +
-  scale_x_continuous(breaks = seq(1900, 2019, by = 5)) +
-  scale_fill_viridis_d() +
-  scale_color_viridis_d()
-
-songsbyyearpop 
 
 # Sentiment analysis preprocessing --------------------------------------------
 
@@ -266,33 +234,33 @@ avg_sentiment_plot_all <- avg_sentiment_year_all |>
 #examine seasonal trends, by grouping data across all years by month of release
 
 generate_sentiment_seasonal_graph_bing <- function(startdate, enddate) {
-avg_sentiment_seasonal_month <- sm_tokenized_lyrics_sentiment_bing |>
-  filter(release_year >= startdate & release_year <= enddate) |>
-  mutate(release_date = as.character(release_date)) |>
-  mutate(release_month = substr(release_date, 6,7)) |>
-  drop_na(release_month) |>
-  select(c('release_month', 'word', 'sentiment')) |>
-  group_by(release_month, sentiment) |>
-  summarise(word_count = n(), .groups = 'drop') |>
-  pivot_wider(names_from = sentiment, values_from = word_count) |>
-  summarise(release_month, sentscore = (positive - negative)/(positive + negative))
-
-avg_sentiment_plot_seasonal_month_bing <- avg_sentiment_seasonal_month |>
-  mutate(release_month_day = as.Date(paste0("2022-", release_month, "-01"), "%Y-%m-%d")) |>
-  ggplot(aes(x = release_month_day, y = sentscore, group = 1)) +
-  geom_point(aes(color = sentscore > 0), size = 3) +
-  geom_line(linewidth = 0.5, color = 'darkgrey') +
-  geom_abline(slope = 0, intercept = 0, linetype = 2) +
-  theme_ipsum_rc() +
-  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
-  ylim(NA, 0.2) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.x = element_text(size = 12),
-        panel.grid.minor.x = element_blank()) +
-  labs(title = startdate) +
-  scale_colour_viridis_d(option = 'plasma')
-
-avg_sentiment_plot_seasonal_month_bing
+  avg_sentiment_seasonal_month <- sm_tokenized_lyrics_sentiment_bing |>
+    filter(release_year >= startdate & release_year <= enddate) |>
+    mutate(release_date = as.character(release_date)) |>
+    mutate(release_month = substr(release_date, 6,7)) |>
+    drop_na(release_month) |>
+    select(c('release_month', 'word', 'sentiment')) |>
+    group_by(release_month, sentiment) |>
+    summarise(word_count = n(), .groups = 'drop') |>
+    pivot_wider(names_from = sentiment, values_from = word_count) |>
+    summarise(release_month, sentscore = (positive - negative)/(positive + negative))
+  
+  avg_sentiment_plot_seasonal_month_bing <- avg_sentiment_seasonal_month |>
+    mutate(release_month_day = as.Date(paste0("2022-", release_month, "-01"), "%Y-%m-%d")) |>
+    ggplot(aes(x = release_month_day, y = sentscore, group = 1)) +
+    geom_point(aes(color = sentscore > 0), size = 3) +
+    geom_line(linewidth = 0.5, color = 'darkgrey') +
+    geom_abline(slope = 0, intercept = 0, linetype = 2) +
+    theme_ipsum_rc() +
+    scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+    ylim(NA, 0.2) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.title.x = element_text(size = 12),
+          panel.grid.minor.x = element_blank()) +
+    labs(title = startdate) +
+    scale_colour_viridis_d(option = 'plasma')
+  
+  avg_sentiment_plot_seasonal_month_bing
 }
 
 #--------AFINN VERSIONS
@@ -324,54 +292,19 @@ generate_sentiment_seasonal_graph_afinn <- function(startdate, enddate) {
   avg_sentiment_plot_seasonal_month_afinn <- avg_sentiment_seasonal_month |>
     mutate(release_month_day = as.Date(paste0("2022-", release_month, "-01"), "%Y-%m-%d")) |>
     ggplot(aes(x = release_month_day, y = sentiment_score, group = 1)) +
-    geom_point(aes(color = sentiment_score > 0), size = 3) +
+    geom_point(aes(color = sentiment_score > 0), size = 4) +
     geom_line(linewidth = 0.5, color = 'darkgrey') +
     geom_abline(slope = 0, intercept = 0, linetype = 2) +
     theme_ipsum_rc() +
     scale_x_date(date_labels = "%b", date_breaks = "1 month") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
           axis.title.x = element_text(size = 12),
-          panel.grid.minor.x = element_blank()) +
-    ylim(-0.6,0.6) +
+          panel.grid.minor.x = element_blank(),
+          legend.position = 'bottom') +
+    ylim(-0.6,0.3) +
     labs(title = startdate,caption = 'AFINN') +
-    scale_colour_viridis_d(option = 'plasma')
+    scale_colour_viridis_d(option = 'viridis')
   
   avg_sentiment_plot_seasonal_month_afinn
 }
-
-#explicitness: percentage of explicit songs released in each year
-prop_explicit_plot <- song_master |>
-  filter(release_year > 1959) |>
-  mutate(is_explicit = ifelse(explicit == 'True',1,0)) |>
-  group_by(release_year) |>
-  summarise(prop = sum(is_explicit)/n()) |>
-  ggplot(aes(x = release_year, y = prop)) +
-  geom_col(fill = 'pink') 
-
-#popularity vs year-end score: are they the same?
-
-song_master |>
-  filter(release_year > 1959) |>
-  group_by(release_year) |>
-  summarise(pop = median(popularity), score = mean(year_end_score)) |>
-  ggplot(aes(x = release_year)) +
-  geom_col(aes(y=pop)) 
-  
-summary <- song_master |>
-  filter(release_year > 1961) |>
-  group_by(release_year) |>
-  summarise(pop = median(popularity), score = mean(year_end_score)) |>
-  ggplot(aes(x = release_year)) +
-  geom_col(aes(y=score)) 
-
-song_master |>
-ggscatterstats(
-  x = popularity,
-  y = year_end_score,
-  type = 'non-parametric',
-  point.args = list(color = 'purple', alpha = 0.4)
-) +
-  theme_ipsum_rc() +
-  labs(title = 'Popularity vs Year end score',
-       subtitle = 'As popularity increases, so does year end score')
 
