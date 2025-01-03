@@ -16,7 +16,7 @@ library(ggstatsplot)
 
 #1a. Reading in data ------------------------------------------------------
 
-#read in data for lyrics, track metadata (for release date), artist metadata (for genre), and song popularity, and drop unneeded columns
+#read in data for lyrics, track metadata (for release date), artist metadata (for genre), song popularity, and musical features, and drop unneeded columns
 
 track_meta <- read.csv("Data/musicoset_metadata/tracks.csv", sep = "\t") |>
   select(!c('album_id', 'track_number'))
@@ -38,6 +38,10 @@ song_pop <- read_delim("Data/musicoset_popularity/song_pop.csv", delim = "\t") |
   select(song_id, year_end_score) |>
   distinct(song_id, .keep_all = TRUE)
 
+#read in data on musical fingerprints, drop unneeded columns
+song_features <- read_delim("Data/musicoset_songfeatures/acoustic_features.csv", delim = "\t") |>
+  select(-c(duration_ms,key,mode,time_signature,tempo)) |>
+  drop_na()
 
 #read in song metadata. This particular CSV isn't formatted properly so will require additional cleaning steps
 
@@ -85,6 +89,7 @@ sum(is.na(song_lyrics))
 sum(is.na(track_meta))
 sum(is.na(song_pop))
 sum(is.na(artist_meta))
+sum(is.na(song_features))
 
 
 #Join everything together and drop extraneous values to create the master dataset
@@ -92,12 +97,15 @@ sum(is.na(artist_meta))
 song_master <- inner_join(song_meta, track_meta, by = 'song_id') |>
   inner_join(song_lyrics, by = 'song_id') |>
   inner_join(song_pop, by = 'song_id') |>
-  inner_join(artist_meta, by = c('artist_id' = 'artist_id'))
+  inner_join(artist_meta, by = 'artist_id') |>
+  inner_join(song_features, by = 'song_id')
   
 #split out 'year' value from release date for consistency across releases in terms of granularity
+#filter for only songs released after 1962, when the dataset is supposed to begin
 
 song_master <- song_master |>
-  mutate(release_year = str_sub(release_date,1,4))
+  mutate(release_year = str_sub(release_date,1,4)) |>
+  filter(release_year > 1961) 
 
 song_master$popularity <- as.numeric(song_master$popularity)
 song_master$release_year <- as.numeric(song_master$release_year)
@@ -112,6 +120,20 @@ song_master <- song_master |>
     TRUE ~ "Middle 50%"
   )
   )
+
+#flag songs that were released pre 1990 vs post 1990
+
+song_master <- song_master |>
+  mutate(era = case_when(
+    release_year < 1991 ~ 'Pre-1991',
+    release_year >= 1991 ~ 'Post-1991'
+    )
+    )
+
+#convert column names to title case so it looks nice on plots
+
+colnames(song_master) <- str_to_title(colnames(song_master))
+
 
 # 2. Genre Classification -------------------------------------------------
 
