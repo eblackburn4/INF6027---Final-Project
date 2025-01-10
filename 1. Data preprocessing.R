@@ -124,16 +124,10 @@ song_master <- song_master |>
 #flag songs that were released pre 1990 vs post 1990
 
 song_master <- song_master |>
-  mutate(era = case_when(
+  mutate(era = as_factor(case_when(
     release_year < 1991 ~ 'Pre-1991',
     release_year >= 1991 ~ 'Post-1991'
-    )
-    )
-
-#convert column names to title case so it looks nice on plots
-
-colnames(song_master) <- str_to_title(colnames(song_master))
-
+    )))
 
 # 2. Genre Classification -------------------------------------------------
 
@@ -227,19 +221,9 @@ song_master |>
     x = popularity,
     y = year_end_score,
     type = 'non-parametric',
-    point.args = list(alpha = 0.4)
+    point.args = list(alpha = 0.2)
   ) +
   theme_ipsum_rc() +
   labs(title = 'Popularity vs Year end score',
        subtitle = 'As popularity increases, so does year end score') 
 
-#explicitness: percentage of explicit songs released in each year
-prop_explicit_plot <- song_master |>
-  filter(release_year > 1959) |>
-  mutate(is_explicit = ifelse(explicit == 'True',1,0)) |>
-  group_by(release_year) |>
-  summarise(prop = sum(is_explicit)/n()) |>
-  ggplot(aes(x = release_year, y = prop)) +
-  geom_col(fill = 'pink') +
-  geom_abline(slope = 1, intercept = 1990) +
-  theme_ipsum_rc()

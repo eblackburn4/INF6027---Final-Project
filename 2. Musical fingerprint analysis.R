@@ -13,7 +13,8 @@ library(textdata)
 library(scico)
 library(rstatix)
 library(coin)
-
+library(mcp)
+library(segmented)
 
 # -------------visualising the evolution of musical characteristics over time ----------
 
@@ -22,11 +23,11 @@ library(coin)
 
 song_features_long_all <- song_master |>
   select(14:22) |>
-  mutate(Loudness = (Loudness - min(Loudness))/(max(Loudness) - min(Loudness))) |>
-  group_by(Release_year) |>
-  summarise(across(c(Acousticness, Danceability, Energy, Instrumentalness, Liveness, Loudness, Speechiness, Valence), mean)) |>
+  mutate(loudness = (loudness - min(loudness))/(max(loudness) - min(loudness))) |>
+  group_by(release_year) |>
+  summarise(across(c(acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, valence), mean)) |>
   pivot_longer(
-    cols = c(Acousticness, Danceability, Energy, Instrumentalness, Liveness, Loudness, Speechiness, Valence),
+    cols = c(acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, valence),
     names_to = "feature",
     values_to = "yearly_avg"
   )
@@ -91,15 +92,15 @@ ggplot(data = song_features_long_all, aes(x = release_year, y = yearly_avg, grou
 
 song_features_long_era <- song_master |>
   select(14:22,24) |>
-  mutate(Loudness = (Loudness - min(Loudness))/(max(Loudness) - min(Loudness))) |>
-  group_by(Release_year, Era) |>
+  mutate(loudness = (loudness - min(loudness))/(max(loudness) - min(loudness))) |>
+  group_by(release_year, era) |>
   pivot_longer(
-    cols = c(Acousticness, Danceability, Energy, Instrumentalness, Liveness, Loudness, Speechiness, Valence),
+    cols = c(acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, valence),
     names_to = "Feature",
     values_to = "Value"
   )
 
-ggplot(song_features_long_era, aes(x = Feature, y = Value, fill = Era)) +
+ggplot(song_features_long_era, aes(x = Feature, y = Value, fill = era)) +
   geom_boxplot(
     position = position_dodge(width = 0.8),
     alpha = 0.7,
@@ -132,12 +133,54 @@ ggplot(song_features_long_era, aes(x = Feature, y = Value, fill = Era)) +
 
 pairwise_tests <- song_features_long_era |>
   group_by(Feature) |>
-  wilcox_test(Value ~ Era, paired = FALSE) |>  # Perform Wilcoxon test
-  add_significance() |>  # Add significance labels
+  rstatix::wilcox_test(Value ~ era, paired = FALSE) |>  # Perform Wilcoxon test
+  add_significance()  # Add significance labels
 
 effect_sizes <- song_features_long_era |>
   group_by(Feature) |>
-  wilcox_effsize(Value ~ Era)
+  wilcox_effsize(Value ~ era)
 
 
+#change point analysis
 
+testdat <- song_features_long_all |>
+  filter(feature == 'loudness') |>
+  dplyr::select(!feature)
+
+testdatamalg <- song_features_long_all |>
+  group_by(release_year) |>
+  summarise(avg_prop = mean(yearly_avg))
+
+segtest<-selgmented(testdatamalg$avg_prop, Kmax=10, type='aic', plot.ic=TRUE, check.dslope = FALSE) 
+plot(segtest, res=TRUE, col=2, lwd=3)
+
+lm_songs <- lm(avg_prop ~ release_year, data = testdatamalg)
+
+# Fit a segmented model with 2 breakpoints
+seg_model <- segmented(lm_songs, seg.Z = ~release_year, npsi = 2)
+
+# Summary of the segmented model
+summary(seg_model)
+
+breakpoints <- seg_model$psi[, "Est."]
+print(breakpoints)  
+
+testdatamalg$fitted_values <- fitted(seg_model)
+
+ggplot(testdatamalg, aes(x = release_year, y = avg_prop)) +
+  geom_point(color = "gray", size = 2, alpha = 0.7) +  # Scatterplot of data
+  geom_line(aes(y = fitted_values), size = 1) +  # Segmented model fit
+  geom_vline(xintercept = breakpoints, linetype = "dashed")  +
+  annotate("text", x=1990, y=0.45, label="1991", angle=90) + # Breakpoints
+  labs(
+    title = "Two-Breakpoint Model",
+    x = "Release Year",
+    y = "Average Value"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  theme_ipsum_rc()
