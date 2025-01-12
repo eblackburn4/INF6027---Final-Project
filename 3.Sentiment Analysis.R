@@ -308,3 +308,14 @@ generate_sentiment_seasonal_graph_afinn <- function(startdate, enddate) {
   avg_sentiment_plot_seasonal_month_afinn
 }
 
+#explicitness: percentage of explicit songs released in each year
+
+prop_explicit_plot <- song_master |>
+  filter(release_year > 1959) |>
+  mutate(is_explicit = ifelse(explicit == 'True',1,0)) |>
+  group_by(release_year) |>
+  summarise(prop = sum(is_explicit)/n()) |>
+  ggplot(aes(x = release_year, y = prop)) +
+  geom_col(fill = 'pink') +
+  geom_abline(slope = 1, intercept = 1990) +
+  theme_ipsum_rc()
