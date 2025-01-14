@@ -34,3 +34,6 @@ rsconnect/
 #RData
 
 .RData
+
+#spare code file
+sparecode.r

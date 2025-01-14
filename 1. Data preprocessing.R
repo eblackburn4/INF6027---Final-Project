@@ -2,17 +2,8 @@
 ## Purpose of script: Ingesting, processing and joining MusicOSet data prior to analysis, and (roughly) categorising each song into one of 10 high-level genres
 ## Author: Ned Blackburn
 ## Date Created: 2024-11-27
+## ---------------------------
 
-options(scipen = 6, digits = 5) 
-library(tidyverse)
-library(hrbrthemes)
-library(GGally)
-library(ggfortify)
-library(tidytext)
-library(textdata)
-library(scico)
-library(ggside)
-library(ggstatsplot)
 
 #1a. Reading in data ------------------------------------------------------
 
@@ -40,8 +31,9 @@ song_pop <- read_delim("Data/musicoset_popularity/song_pop.csv", delim = "\t") |
 
 #read in data on musical fingerprints, drop unneeded columns
 song_features <- read_delim("Data/musicoset_songfeatures/acoustic_features.csv", delim = "\t") |>
-  select(-c(duration_ms,key,mode,time_signature,tempo)) |>
-  drop_na()
+  select(-c(duration_ms,key,mode,time_signature, liveness)) |>
+  drop_na() |>
+  filter(tempo != 0)
 
 #read in song metadata. This particular CSV isn't formatted properly so will require additional cleaning steps
 
@@ -107,6 +99,8 @@ song_master <- song_master |>
   mutate(release_year = str_sub(release_date,1,4)) |>
   filter(release_year > 1961) 
 
+
+
 song_master$popularity <- as.numeric(song_master$popularity)
 song_master$release_year <- as.numeric(song_master$release_year)
 song_master$release_date <- as.Date(song_master$release_date)
@@ -121,7 +115,7 @@ song_master <- song_master |>
   )
   )
 
-#flag songs that were released pre 1990 vs post 1990
+#flag songs that were released pre 1991 vs post 1991
 
 song_master <- song_master |>
   mutate(era = as_factor(case_when(
@@ -173,15 +167,15 @@ song_master <- song_master |>
 songsbyyear <- song_master |>
   filter(release_year > 1959) |>
   ggplot(aes(x = release_year)) +
-  geom_bar(fill = 'purple') +
+  geom_bar() +
   theme_ipsum_rc() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.x = element_text(size = 11, face = 'bold'),
         axis.title.y = element_text(size = 11, face = 'bold'),
         panel.grid.minor.x = element_blank()) +
-  scale_x_continuous(breaks = seq(1960, 2019, by = 5)) 
+  scale_x_continuous(breaks = seq(1960, 2019, by = 5)) +
+  scale_fill_viridis_d()
 
-songsbyyear
 
 #plot proportions of most/least popular songs released in each year
 
@@ -197,23 +191,8 @@ songsbyyearpop <- song_master |>
   scale_fill_viridis_d() +
   scale_color_viridis_d()
 
-songsbyyearpop 
 
 #popularity vs year-end score: are they the same?
-
-song_master |>
-  filter(release_year > 1959) |>
-  group_by(release_year) |>
-  summarise(pop = median(popularity), score = mean(year_end_score)) |>
-  ggplot(aes(x = release_year)) +
-  geom_col(aes(y=pop)) 
-
-summary <- song_master |>
-  filter(release_year > 1961) |>
-  group_by(release_year) |>
-  summarise(pop = median(popularity), score = mean(year_end_score)) |>
-  ggplot(aes(x = release_year)) +
-  geom_col(aes(y=score)) 
 
 song_master |>
   filter(release_year > 1961) |>
@@ -226,4 +205,24 @@ song_master |>
   theme_ipsum_rc() +
   labs(title = 'Popularity vs Year end score',
        subtitle = 'As popularity increases, so does year end score') 
+
+#graph analysing genre popularity over time
+
+genre_pop_year <- song_master |>
+  filter(genre_agg != 'Other') |>
+  group_by(genre_agg, release_year) |>
+  summarise(yearscore = sum(year_end_score))
+
+ggplot(data = genre_pop_year, aes(x = release_year, y = yearscore, group = genre_agg, color = genre_agg)) +
+  geom_smooth(se = FALSE) +
+  scale_color_viridis_d(option = 'H') +
+  geom_vline(xintercept = 1991) +
+  theme_ipsum_rc(grid = "XY")
+
+#table with number of songs in each genre and percentages
+genre_summary <- song_master |>
+  group_by(genre_agg) |>
+  summarise(n = n(), avgpop = mean(year_end_score)) |>
+  mutate(prop = percent(n/sum(n), accuracy = 0.1)) |>
+  arrange(by = desc(n))
 
