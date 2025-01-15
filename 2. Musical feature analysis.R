@@ -5,33 +5,58 @@
 
 # -------------visualising the evolution of musical characteristics over time ----------
 
+#define a vector of the characteristics so we can use as an argument in subsequent functions
+
+features_list <- c('Acousticness', 'Danceability', 'Energy', 'Instrumentalness', 'Tempo', 'Loudness','Liveness','Speechiness', 'Valence')
+
+
 #rescale all variables to a relative index so they can be combined and compared
 #calculate an overall feature index per song
 #rename feature variables to title case so they look nice on graphs
 
 song_master <- song_master |>
-  mutate(across(14:21, rescale)) |>
+  mutate(across(14:22, rescale)) |>
   rowwise() |>
-  mutate(mean_features = mean(c_across(14:21))) |>
+  mutate(mean_features = mean(c_across(14:22))) |>
+  mutate(mahal = )
   ungroup() |>
-  rename_with(~ str_to_title(.), .cols = 14:21)
+  rename_with(~ str_to_title(.), .cols = 14:22)
 
 #define a vector of the characteristics so we can use as an argument in subsequent functions
 
-features_list <- c('Acousticness', 'Danceability', 'Energy', 'Instrumentalness', 'Tempo', 'Loudness', 'Speechiness', 'Valence')
+features_list <- c('Acousticness', 'Danceability', 'Energy', 'Instrumentalness', 'Tempo', 'Loudness','Liveness','Speechiness', 'Valence')
 
 # exploring how related musical characteristics are correlated
 
 song_master |>
   select(features_list) |>
   cor() |>
-  corrplot(method = 'square', type = 'lower', order = 'FPC', diag = FALSE, tl.col="black",)
+  corrplot(method = 'square', type = 'lower', order = 'FPC', diag = FALSE, tl.col="black",tl.cex = 0.9, tl.)
 
+#exploring distributions of each feature
+
+song_master |>
+  select(features_list) |>
+  pivot_longer(cols = everything(), names_to = 'Feature', values_to = 'Value') |>
+  ggplot(aes(x = Value)) +
+  geom_density(aes(fill = Feature, y = ..scaled..)) +
+  facet_wrap(~Feature, scales = 'free_y') +
+  labs(x = 'Value',
+       y = 'Density') +
+  theme_ipsum_rc(grid = 'X', axis_text_size = 9, axis_title_size = 11,
+                 plot_margin = margin(20, 20, 20, 20), axis_title_just = 'mc') +
+  theme(legend.position = 'none',
+        strip.text.x = element_text(size = 11, color = 'black'),
+        axis.title.x = element_text(vjust = -2, face = 'bold'),
+        axis.title.y = element_text(vjust = 3, face = 'bold')) +
+  scale_fill_viridis_d() +
+  scale_y_continuous(labels = label_number(accuracy = 0.1)) +
+  scale_x_continuous(labels = label_number(accuracy = 0.1))
 
 # drop unneeded columns,then calculate yearly average values for each characteristic and convert to long format for faceting 
 
 song_features_long_all <- song_master |>
-  select(14:22) |>
+  select(14:23) |>
   group_by(release_year) |>
   summarise(across(features_list, mean)) |>
   pivot_longer(
@@ -42,34 +67,31 @@ song_features_long_all <- song_master |>
 
 #create facet plot for whole dataset
 
-ggplot(data = song_features_long_all, aes(x = release_year, y = yearly_avg, group = feature)) +
-  geom_smooth(size = 0.8, color = 'black', alpha = 0.8, se = FALSE) +
-  geom_point(size = 0.6, color = 'darkgrey', alpha = 0.6) +
+ggplot(data = song_features_long_all, aes(x = release_year, y = yearly_avg, group = feature, color = feature)) +
+  geom_smooth(size = 1, alpha = 0.95, se = FALSE) +
+  geom_point(size = 0.7, alpha = 0.6, color = 'black') +
   geom_vline(xintercept = 1991, linetype = "dotted", color = "black", size = 0.7) +
   facet_wrap(~ feature, scales = "free_y") +
   labs(
-    title = "Average Evolution of Musical Characteristics Over Time",
     x = "Year",
     y = "Average Value"
   ) +
-  theme_ipsum_rc() 
-
-
-#create plot for 'overall' index
-
-song_master |>
-  select(c('release_year','mean_features')) |>
-  group_by(release_year) |>
-  summarise(yearly_avg = mean(mean_features)) |>
-  ggplot(aes(x = release_year, y = yearly_avg)) +
-  geom_point() +
-  geom_smooth(se = FALSE) +
-  theme_ipsum_rc()
+  theme_ipsum_rc(grid = 'XY',
+                 axis_title_size = 12, 
+                 axis_title_face = 'bold', 
+                 axis_title_just = 'mc',
+                 axis_text_size = 10,
+                 plot_margin = margin(10, 10, 10, 10)) +
+  theme(legend.position = 'none',
+        axis.title.x = element_text(vjust = -3),
+        axis.title.y = element_text(vjust = 3)) +
+  scale_color_viridis_d(option = 'H') +
+  scale_x_continuous(breaks = breaks_pretty(5))
 
 # Boxplot Comparing musical features pre and post 1991 ----------------------------
 
 song_features_long_era <- song_master |>
-  select(14:22,24) |>
+  select(14:23,25) |>
   group_by(release_year, era) |>
   pivot_longer(
     cols = features_list,
@@ -108,12 +130,12 @@ ggplot(song_features_long_era, aes(x = Feature, y = Value, fill = era)) +
 
 #pairwise signifiance tests for differences of means for each feature in each era and calculate effect sizes
 
-pairwise_tests <- song_features_long_era |>
+pairwise_tests_features <- song_features_long_era |>
   group_by(Feature) |>
   rstatix::wilcox_test(Value ~ era, paired = FALSE) |>  # Perform Wilcoxon test
   add_significance()  # Add significance labels
 
-effect_sizes <- song_features_long_era |>
+effect_sizes_features <- song_features_long_era |>
   group_by(Feature) |>
   wilcox_effsize(Value ~ era)
 
@@ -121,7 +143,7 @@ effect_sizes <- song_features_long_era |>
 #effect of genre: average characteristics by genre
 
 song_features_long_genre <- song_master |>
-  select(14:21,24,25) |>
+  select(14:22,25,26) |>
   mutate(grouping = ifelse(genre_agg %in% c('Hip-Hop', 'Country'), genre_agg, 'All other')) |>
   group_by(era, grouping) |>
   summarise(across(features_list, mean)) |>

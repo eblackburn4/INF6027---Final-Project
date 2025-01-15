@@ -31,7 +31,7 @@ song_pop <- read_delim("Data/musicoset_popularity/song_pop.csv", delim = "\t") |
 
 #read in data on musical fingerprints, drop unneeded columns
 song_features <- read_delim("Data/musicoset_songfeatures/acoustic_features.csv", delim = "\t") |>
-  select(-c(duration_ms,key,mode,time_signature, liveness)) |>
+  select(-c(duration_ms,key,mode,time_signature)) |>
   drop_na() |>
   filter(tempo != 0)
 
@@ -93,13 +93,11 @@ song_master <- inner_join(song_meta, track_meta, by = 'song_id') |>
   inner_join(song_features, by = 'song_id')
   
 #split out 'year' value from release date for consistency across releases in terms of granularity
-#filter for only songs released after 1962, when the dataset is supposed to begin
+#filter for only songs released after 1964, where N = at least 100 for each year to suppress noise
 
 song_master <- song_master |>
   mutate(release_year = str_sub(release_date,1,4)) |>
-  filter(release_year > 1961) 
-
-
+  filter(release_year > 1963) 
 
 song_master$popularity <- as.numeric(song_master$popularity)
 song_master$release_year <- as.numeric(song_master$release_year)
@@ -164,47 +162,92 @@ song_master <- song_master |>
 
 #plot release dates in dataset by year
 
-songsbyyear <- song_master |>
-  filter(release_year > 1959) |>
+song_master |>
   ggplot(aes(x = release_year)) +
-  geom_bar() +
-  theme_ipsum_rc() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.x = element_text(size = 11, face = 'bold'),
-        axis.title.y = element_text(size = 11, face = 'bold'),
-        panel.grid.minor.x = element_blank()) +
-  scale_x_continuous(breaks = seq(1960, 2019, by = 5)) +
-  scale_fill_viridis_d()
+  geom_bar(fill = '#3b528b') +
+  labs(x = 'Release year',
+       y = 'Number of releases') +
+  theme_ipsum_rc(grid = 'XY') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, size = 10),
+        axis.text.y = element_text(hjust = 1.3, size = 10),
+        axis.title.x = element_text(size = 11),
+        axis.title.y = element_text(size = 11),
+        axis.title= element_text(hjust = 1)) +
+  scale_x_continuous(breaks = breaks_pretty(10))
 
 
 #plot proportions of most/least popular songs released in each year
 
-songsbyyearpop <- song_master |>
-  filter(release_year > 1959) |>
-  ggplot(aes(x = release_year, fill = pop_quartile, color = pop_quartile)) +
-  geom_bar(position = 'fill') +
-  theme_ipsum_rc() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.x = element_text(size = 12),
-        panel.grid.minor.x = element_blank()) +
-  scale_x_continuous(breaks = seq(1900, 2019, by = 5)) +
-  scale_fill_viridis_d() +
-  scale_color_viridis_d()
+song_master |>
+  ggplot(aes(x = release_year, fill = pop_quartile)) +
+  geom_bar(position = 'fill', width = 1) +
+  theme_ipsum_rc(grid = 'Y') +
+  labs(x = 'Release year',
+       y = 'Proportion',
+       fill = 'Year-end score quartile') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 10),
+        axis.text.y = element_text(angle = 0, hjust = -1, vjust = 0.5, size = 10),
+        axis.title.x =element_text(size = 11),
+        axis.title.y = element_text(size = 11),
+        axis.ticks.x = element_line(size = 0.5, color = 'grey'),
+        axis.ticks.y = element_line(size = 0.5, color = 'grey'),
+        legend.position = 'bottom',
+        legend.title = element_text(size = 11)) +
+  scale_x_continuous(
+    limits = c(1964, 2019), 
+    breaks = seq(1964, 2019, by = 5)) +
+  scale_fill_viridis_d() 
 
 
 #popularity vs year-end score: are they the same?
 
 song_master |>
-  filter(release_year > 1961) |>
-  ggscatterstats(
-    x = popularity,
-    y = year_end_score,
-    type = 'non-parametric',
-    point.args = list(alpha = 0.2)
-  ) +
-  theme_ipsum_rc() +
-  labs(title = 'Popularity vs Year end score',
-       subtitle = 'As popularity increases, so does year end score') 
+  ggplot(aes(x = popularity, y = year_end_score)) +
+  geom_point(color = '#3b528b', alpha = 0.5) +
+  geom_xsidehistogram(fill = '#f89540') +
+  geom_ysidehistogram(fill = '#cc4778') +
+  labs(x = 'Popularity', y = 'Year-end score') +
+  theme_ipsum_rc(axis_title_size = 12, axis_text_size = 11, 
+                 axis_title_just = 'tr') +
+  theme_ggside_void()
+  
+#Plot top genres
+
+genre1 <- song_master |>
+  group_by(genre_agg) |>
+  summarise(n = n()) |>
+  arrange(n) |>
+  ggplot(aes(x = fct_reorder(genre_agg, n), y = n, fill = genre_agg)) +
+  geom_col(fill = '#cc4778') +
+  labs(x = '', y = 'Number of songs') +
+  coord_flip() +
+  theme_ipsum_rc(grid = 'X', 
+                 axis_text_size = 11, 
+                 axis_title_size = 12,
+                 plot_margin = margin(5, 5, 5, 5)) +
+  theme(legend.position = 'none', 
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+        axis.title.x = element_text(hjust = 1, vjust = -.5)) 
+  
+
+genre2 <- song_master |>
+  group_by(main_genre) |>
+  summarise(n = n()) |>
+  arrange(desc(n)) |>
+  slice_head(n = 11) |>
+  ggplot(aes(x = fct_reorder(main_genre, n), y = n, fill = main_genre)) +
+  geom_col(fill = '#0d0887') +
+  labs(x = '', y = 'Number of songs') +
+  coord_flip() +
+  theme_ipsum_rc(grid = 'X', 
+                 axis_text_size = 11, 
+                 axis_title_size = 12,
+                 plot_margin = margin(5, 5, 5, 5)) +
+  theme(legend.position = 'none', 
+        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1),
+        axis.title.x = element_text(hjust = 1, vjust = -.5)) 
+
+genre1 + genre2
 
 #graph analysing genre popularity over time
 
