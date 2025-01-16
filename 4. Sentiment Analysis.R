@@ -6,7 +6,7 @@
 
 ## ------------------------------------------------------------------------
 # RQ1: how has the lyrical sentiment of popular songs changed over time?
-# RQ2: is there a relationship between lyrical sentiment and musical 'valence'?
+# RQ2: is there a meaningful difference in lyrical sentiment across eras?
 ## ------------------------------------------------------------------------
 
 
@@ -21,10 +21,9 @@ song_master <- song_master |>
   mutate(lyrics = str_replace_all(lyrics, "'", "")) |>
   mutate(lyrics = str_replace_all(lyrics, "\\\\" , ""))
 
-#load in sentiment lexicon
+#load in AFINN sentiment lexicon
 
 lexicon_afinn <- get_sentiments("afinn")
-
 
 #use tidytext's 'unnest tokens' function to split each word into its own row, then inner join with the sentiment lexicon
 #songs with no lyrics are filtered out
@@ -39,7 +38,7 @@ sm_tokenized_lyrics_sentiment_afinn <- sm_tokenized_lyrics |>
   inner_join(lexicon_afinn, by = 'word')  |>
   anti_join(filter(stop_words), by = 'word')
 
-#exploring number of positive vs negative words, and most common positive and negative words
+#exploring number of positive vs negative words
 
 word_counts_posneg <- sm_tokenized_lyrics_sentiment_afinn |>
   count(word, value, sort = TRUE)
@@ -79,25 +78,7 @@ word_counts_posneg |>
 
 # Sentiment analysis ------------------------------------------------------
 
-#Find average sentiment of songs released in each year, by year
-
-avg_sentiment_year_all_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
-  select(c('release_year', 'word', 'value')) |>
-  group_by(release_year) |>
-  summarise(sentiment_score = sum(value), .groups = 'drop')
-
-avg_sentiment_year_all_afinn |>
-  ggplot(aes(x = as.numeric(release_year), y = sentiment_score)) +
-  geom_point() +
-  geom_smooth(method = 'loess', se = FALSE, color = '#3b528b') +
-  geom_abline(slope = 0, intercept = 0, linetype = 2) +
-  theme_ipsum_rc(grid = 'XxY', axis_title_size = 12) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.3),
-        axis.title.x =element_text(size = 12),
-        axis.title.y = element_text(size = 12)) 
-
-
-#alternative: find average song sentiment per year
+#find average song sentiment per year
 
 avg_sentiment_year_per_song_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
   select(c('release_year', 'song_id', 'word', 'value')) |>
@@ -106,15 +87,22 @@ avg_sentiment_year_per_song_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
   group_by(release_year) |>
   summarise(sentiment_score_year = mean(sentiment_score))
 
+#plot sentiment
+
 avg_sentiment_year_per_song_afinn |>
   ggplot(aes(x = as.numeric(release_year), y = sentiment_score_year)) +
   geom_point() +
   geom_smooth(method = 'loess', se = FALSE, color = '#3b528b') +
-  geom_abline(slope = 0, intercept = 0, linetype = 2) +
-  theme_ipsum_rc(grid = 'XxY', axis_title_size = 12) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1.3),
-        axis.title.x =element_text(size = 12),
-        axis.title.y = element_text(size = 12)) 
+  geom_vline(xintercept = 1990, linetype = 2) +
+  labs(x = 'Year',
+       y = 'Average sentiment score') +
+  theme_ipsum_rc(grid = 'XY', axis_title_size = 14,
+                 plot_margin = margin(5, 5, 5, 5)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 2),
+        axis.text.y = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
+        axis.title.x =element_text(size = 14, vjust = -2),
+        axis.title.y = element_text(size = 14, vjust = 3)) +
+  scale_x_continuous(breaks = breaks_pretty(5))
 
 
 #comparison of mean sentiment across eras with Mann-Whitney (Wilcoxson) test and effect sizes
@@ -133,35 +121,4 @@ effsize_lyrics <- sm_tokenized_lyrics_sentiment_afinn |>
   summarise(sentiment_score = mean(value), .groups = 'drop') |>
   select(c('sentiment_score', 'era')) |>
   wilcox_effsize(sentiment_score ~ era)
-
-# plot of explicitness: percentage of explicit songs released in each year
-
-prop_explicit_plot <- song_master |>
-  filter(release_year > 1961) |>
-  mutate(is_explicit = ifelse(explicit == 'True',1,0)) |>
-  group_by(release_year) |>
-  summarise(prop = sum(is_explicit)/n()) |>
-  ggplot(aes(x = release_year, y = prop)) +
-  geom_col(fill = 'pink') +
-  geom_abline(slope = 1, intercept = 1990) +
-  theme_ipsum_rc()
-
-#average sentiment by genre
-
-sent_by_genre <- sm_tokenized_lyrics_sentiment_afinn |>
-  group_by(genre_agg, era) |>
-  summarise(meansent = mean(value)) 
-
-ggplot(data = sent_by_genre, aes(x = genre_agg, y = meansent, color = era, group = era)) +
-  geom_line(aes(group = genre_agg), color = "grey90", linewidth = 5) +
-  geom_point(position = 'dodge', size = 5) +
-  theme_ipsum_rc(axis_text_size = 10, axis_title_size = 12) +
-  scale_color_viridis_d()
-
-
-
-
-
-
-
 

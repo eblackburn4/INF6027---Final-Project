@@ -1,5 +1,5 @@
 ## ---------------------------
-## Purpose of script: Ingesting, processing and joining MusicOSet data prior to analysis, and (roughly) categorising each song into one of 10 high-level genres
+## Purpose of script: Ingesting, processing and joining MusicOSet data prior to analysis
 ## Author: Ned Blackburn
 ## Date Created: 2024-11-27
 ## ---------------------------
@@ -121,9 +121,17 @@ song_master <- song_master |>
     release_year >= 1991 ~ 'Post-1991'
     )))
 
-# 2. Genre Classification -------------------------------------------------
+#rescale all musical feature variables to a relative index (0 to 1, min max scaling) so they can be combined and compared
+#rename feature variables to title case so they look nice on graphs
+
+song_master <- song_master |>
+  mutate(across(14:22, rescale)) |>
+  rename_with(~ str_to_title(.), .cols = 14:22)
+
+# Genre Classification -------------------------------------------------
 
 #We have way too many niche genres. Let's amalgamate them based on keywords so we can actually analyse them
+#NB: Genre analysis was not included in the report but I left this in the code as it was part of my EDA
 
 #define keywords (based on genres and subgenres from allmusic.com)
 
@@ -158,7 +166,7 @@ song_master <- song_master |>
     )
   )
 
-#1b. EDA ---------------------------------------------------------------------
+# initial EDA ---------------------------------------------------------------------
 
 #plot release dates in dataset by year
 
@@ -211,61 +219,7 @@ song_master |>
                  axis_title_just = 'tr') +
   theme_ggside_void()
   
-#Plot top genres
 
-genre1 <- song_master |>
-  group_by(genre_agg) |>
-  summarise(n = n()) |>
-  arrange(n) |>
-  ggplot(aes(x = fct_reorder(genre_agg, n), y = n, fill = genre_agg)) +
-  geom_col(fill = '#cc4778') +
-  labs(x = '', y = 'Number of songs') +
-  coord_flip() +
-  theme_ipsum_rc(grid = 'X', 
-                 axis_text_size = 11, 
-                 axis_title_size = 12,
-                 plot_margin = margin(5, 5, 5, 5)) +
-  theme(legend.position = 'none', 
-        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
-        axis.title.x = element_text(hjust = 1, vjust = -.5)) 
-  
 
-genre2 <- song_master |>
-  group_by(main_genre) |>
-  summarise(n = n()) |>
-  arrange(desc(n)) |>
-  slice_head(n = 11) |>
-  ggplot(aes(x = fct_reorder(main_genre, n), y = n, fill = main_genre)) +
-  geom_col(fill = '#0d0887') +
-  labs(x = '', y = 'Number of songs') +
-  coord_flip() +
-  theme_ipsum_rc(grid = 'X', 
-                 axis_text_size = 11, 
-                 axis_title_size = 12,
-                 plot_margin = margin(5, 5, 5, 5)) +
-  theme(legend.position = 'none', 
-        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1),
-        axis.title.x = element_text(hjust = 1, vjust = -.5)) 
 
-genre1 + genre2
-
-#graph analysing genre popularity over time
-
-genre_pop_year <- song_master |>
-  filter(genre_agg != 'Other') |>
-  group_by(genre_agg, release_year) |>
-  summarise(yearscore = sum(year_end_score))
-
-ggplot(data = genre_pop_year, aes(x = release_year, y = yearscore, group = genre_agg, color = genre_agg)) +
-  geom_smooth(se = FALSE) +
-  scale_color_viridis_d(option = 'H') +
-  geom_vline(xintercept = 1991) +
-  theme_ipsum_rc(grid = "XY")
-
-#table with number of songs in each genre and percentages
-genre_summary <- song_master |>
-  group_by(genre_agg) |>
-  summarise(n = n(), avgpop = mean(year_end_score)) |>
-  mutate(prop = percent(n/sum(n), accuracy = 0.1)) |>
-  arrange(by = desc(n))
 
