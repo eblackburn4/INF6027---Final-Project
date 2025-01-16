@@ -148,7 +148,6 @@ adult_contemporary_classical <- c('adult', 'standards', 'easy','soundtrack','cla
 
 
 song_master <- song_master |>
-  filter(main_genre != '-') |>
   mutate(main_genre = str_to_lower(main_genre)) |>
   mutate(
     genre_agg = case_when(
