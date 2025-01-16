@@ -6,7 +6,7 @@
 ## ---------------------------
 
 ## -----------------------------------------------------------------------
-# RQ4: Is there any evidence for paradigm shifts representing rapid changes 
+# RQ3: Is there any evidence for paradigm shifts representing rapid changes 
 # in the evolution of musical characteristics?
 ## ------------------------------------------------------------------------
 

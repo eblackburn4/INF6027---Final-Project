@@ -169,7 +169,7 @@ song_master <- song_master |>
 
 #plot release dates in dataset by year
 
-song_master |>
+figure4 <- song_master |>
   ggplot(aes(x = release_year)) +
   geom_bar(fill = '#3b528b') +
   labs(x = 'Release year',
@@ -185,7 +185,7 @@ song_master |>
 
 #plot proportions of most/least popular songs released in each year
 
-song_master |>
+figure5 <- song_master |>
   ggplot(aes(x = release_year, fill = pop_quartile)) +
   geom_bar(position = 'fill', width = 1) +
   theme_ipsum_rc(grid = 'Y') +
@@ -208,7 +208,7 @@ song_master |>
 
 #popularity vs year-end score: are they the same?
 
-song_master |>
+figureA <- song_master |>
   ggplot(aes(x = popularity, y = year_end_score)) +
   geom_point(color = '#3b528b', alpha = 0.5) +
   geom_xsidehistogram(fill = '#f89540') +

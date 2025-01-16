@@ -43,7 +43,7 @@ sm_tokenized_lyrics_sentiment_afinn <- sm_tokenized_lyrics |>
 word_counts_posneg <- sm_tokenized_lyrics_sentiment_afinn |>
   count(word, value, sort = TRUE)
 
-word_counts_posneg |>
+figure8 <- word_counts_posneg |>
   group_by(value) |>
   summarise(incidences = sum(n)) |>
   ggplot(aes(x = as.factor(value), y = incidences, fill = as.factor(value))) +
@@ -60,21 +60,6 @@ word_counts_posneg |>
   ) +
   scale_fill_scico_d(palette = 'vikO', direction = -1) 
 
-word_counts_posneg |>
-  mutate(sentiment = ifelse(value < 0, 'Negative', 'Positive')) |>
-  group_by(sentiment) |>
-  slice_max(n, n = 10) |>
-  ggplot(aes(x= reorder(str_to_title(word), n), y=n, fill = sentiment)) +
-  geom_col() +
-  facet_wrap(~sentiment, scales = 'free_y') +
-  coord_flip() +
-  labs(x = '',
-       y = 'Word Count')+
-  theme_ipsum_rc(grid = 'X', axis_title_size = 12) +
-  theme(legend.position = 'none',
-        strip.text = element_text(face = "italic")) +
-  scale_fill_scico_d(palette = 'vik', direction = -1)
-
 
 # Sentiment analysis ------------------------------------------------------
 
@@ -89,7 +74,7 @@ avg_sentiment_year_per_song_afinn <- sm_tokenized_lyrics_sentiment_afinn |>
 
 #plot sentiment
 
-avg_sentiment_year_per_song_afinn |>
+figure10 <- avg_sentiment_year_per_song_afinn |>
   ggplot(aes(x = as.numeric(release_year), y = sentiment_score_year)) +
   geom_point() +
   geom_smooth(method = 'loess', se = FALSE, color = '#3b528b') +

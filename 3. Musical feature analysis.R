@@ -17,14 +17,14 @@ features_list <- c('Acousticness', 'Danceability', 'Energy', 'Instrumentalness',
 
 # exploring how related musical characteristics are correlated
 
-song_master |>
+figure6 <- song_master |>
   select(features_list) |>
   cor() |>
   corrplot(method = 'square', type = 'lower', order = 'FPC', diag = FALSE, tl.col="black",tl.cex = 0.9)
 
 #exploring distributions of each feature
 
-song_master |>
+figure7 <- song_master |>
   select(features_list) |>
   pivot_longer(cols = everything(), names_to = 'Feature', values_to = 'Value') |>
   ggplot(aes(x = Value)) +
@@ -56,7 +56,7 @@ song_features_long_all <- song_master |>
 
 #create facet plot for whole dataset
 
-ggplot(data = song_features_long_all, aes(x = release_year, y = yearly_avg, group = feature, color = feature)) +
+figure9 <- ggplot(data = song_features_long_all, aes(x = release_year, y = yearly_avg, group = feature, color = feature)) +
   geom_smooth(size = 1, alpha = 0.95, se = FALSE) +
   geom_point(size = 0.7, alpha = 0.6, color = 'black') +
   geom_vline(xintercept = 1991, linetype = "dotted", color = "black", size = 0.7) +
@@ -93,7 +93,7 @@ song_features_long_era$era <- factor(song_features_long_era$era, levels = rev(le
 
 #draw the boxplot 
 
-ggplot(song_features_long_era, aes(x = Feature, y = Value, fill = era)) +
+figure11 <- ggplot(song_features_long_era, aes(x = Feature, y = Value, fill = era)) +
   geom_boxplot(
     position = position_dodge(width = 0.8),
     alpha = 0.7,
